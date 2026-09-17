@@ -51,31 +51,21 @@ public final class CravingDisplay {
         var state = visibleState();
         if (state == null) return;
         if (shownDay != state.day) { page = 0; shownDay = state.day; }
-        int pages = (state.foods().size() + 2) / 3;
-        page = Math.floorMod(page, pages);
+        var remaining = state.foods().stream().filter(id -> !state.hasCompleted(id)).toList();
+        int pages = (remaining.size() + 2) / 3;
+        page = Math.clamp(page, 0, pages - 1);
         int x = left(screen), y = top(screen);
         GuiGraphics graphics = event.getGuiGraphics();
         graphics.pose().pushPose();
         graphics.pose().translate(0, 0, 300);
         graphics.blit(CLOUD, x, y, 0, 0, WIDTH, HEIGHT, WIDTH, HEIGHT);
-        int count = Math.min(3, state.foods().size() - page * 3);
+        int count = Math.min(3, remaining.size() - page * 3);
         for (int i = 0; i < count; i++) {
-            var id = state.foods().get(page * 3 + i);
+            var id = remaining.get(page * 3 + i);
             var stack = new ItemStack(BuiltInRegistries.ITEM.get(id));
             int iconX = x + (WIDTH - count * 18) / 2 + i * 18 + 1;
             int iconY = y + 12;
             graphics.renderItem(stack, iconX, iconY);
-            boolean done = state.hasCompleted(id);
-            if (done) {
-                // Item models render above the GUI plane; draw the badge above their depth.
-                graphics.pose().pushPose();
-                graphics.pose().translate(0, 0, 200);
-                graphics.fill(iconX + 9, iconY + 12, iconX + 12, iconY + 15, 0xFF245344);
-                graphics.fill(iconX + 11, iconY + 10, iconX + 15, iconY + 13, 0xFF245344);
-                graphics.fill(iconX + 10, iconY + 12, iconX + 12, iconY + 14, 0xFF72E09B);
-                graphics.fill(iconX + 12, iconY + 10, iconX + 14, iconY + 12, 0xFF72E09B);
-                graphics.pose().popPose();
-            }
             if (event.getMouseX() >= iconX && event.getMouseX() < iconX + 16 && event.getMouseY() >= iconY && event.getMouseY() < iconY + 16) {
                 var minecraft = Minecraft.getInstance();
                 var lines = new ArrayList<>(Screen.getTooltipFromItem(minecraft, stack));
@@ -97,8 +87,12 @@ public final class CravingDisplay {
     public static void scroll(ScreenEvent.MouseScrolled.Pre event) {
         if (!(event.getScreen() instanceof InventoryScreen screen) || !FoodMoodConfig.SHOW_CLOUD_INVENTORY.get()) return;
         var state = visibleState();
-        if (state != null && state.foods().size() > 3 && inside(screen, event.getMouseX(), event.getMouseY()) && event.getScrollDeltaY() != 0) {
-            page = Math.floorMod(page + (event.getScrollDeltaY() < 0 ? 1 : -1), (state.foods().size() + 2) / 3);
+        if (state == null) return;
+        int remaining = state.foods().size() - state.completedCount();
+        if (remaining > 3 && inside(screen, event.getMouseX(), event.getMouseY()) && event.getScrollDeltaY() != 0) {
+            if (shownDay != state.day) { page = 0; shownDay = state.day; }
+            int pages = (remaining + 2) / 3;
+            page = Math.floorMod(Math.clamp(page, 0, pages - 1) + (event.getScrollDeltaY() < 0 ? 1 : -1), pages);
             event.setCanceled(true);
         }
     }
