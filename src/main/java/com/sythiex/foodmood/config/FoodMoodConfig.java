@@ -22,7 +22,13 @@ public final class FoodMoodConfig {
     public static final ModConfigSpec.ConfigValue<List<? extends String>> REMOVE_LIST = SERVER
             .comment("Item IDs excluded from the pool. Removals always take precedence over additions.")
             .translation("foodmood.configuration.removeFoods")
-            .defineListAllowEmpty("removeFoods", List.of(), () -> "minecraft:rotten_flesh", value -> value instanceof String);
+            .defineListAllowEmpty("removeFoods", List.of(
+                    "minecraft:ominous_bottle",
+                    "minecraft:poisonous_potato",
+                    "minecraft:pufferfish",
+                    "minecraft:rotten_flesh",
+                    "minecraft:spider_eye"
+            ), () -> "minecraft:rotten_flesh", value -> value instanceof String);
     public static final ModConfigSpec.ConfigValue<String> REWARD_EFFECT = SERVER
             .comment("Effect ID of the reward. Invalid effects fall back to \"foodmood:satisfied\". Changes apply on the next in-game day.")
             .translation("foodmood.configuration.rewardEffect")
