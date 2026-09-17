@@ -45,6 +45,103 @@ public final class FoodMoodGameTests {
     }
 
     private static ResourceLocation id(Item item) { return BuiltInRegistries.ITEM.getKey(item); }
+
+    @GameTest(template = "empty")
+    public static void rerollCommandResetsProgressAndPreservesExternalEffects(GameTestHelper helper) throws Exception {
+        var player = new TestPlayer(helper.getLevel());
+        var state = assign(player, Items.APPLE);
+        state.reward = ResourceLocation.withDefaultNamespace("speed");
+        player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600, 1));
+        meal(player, Items.APPLE);
+        helper.assertTrue(state.complete() && state.managingReward, "Fixture must have an earned reward");
+        var dispatcher = player.server.getCommands().getDispatcher();
+        var source = player.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+        int result = dispatcher.execute("foodmood reroll @s", source);
+        helper.assertTrue(result == 1 && !state.complete() && state.completedCount() == 0 && !state.managingReward,
+                "Reroll must clear progress and reward ownership on the same day");
+        helper.assertTrue(state.day == DailyCravings.day(player.server.overworld().getDayTime())
+                && state.foods().size() == Math.min(FoodMoodConfig.CRAVING_COUNT.get(), FoodPool.current().size())
+                && FoodPool.current().containsAll(state.foods()), "Reroll must use today's configured pool and count");
+        var external = player.getEffect(MobEffects.MOVEMENT_SPEED);
+        helper.assertTrue(external != null && external.getDuration() == 600 && external.getAmplifier() == 1,
+                "Reroll must preserve the independent potion's level and remaining duration");
+        var selection = state.foods();
+        CravingService.synchronizeDay(player);
+        helper.assertTrue(state.foods() == selection, "Next tick must retain the manual reroll");
+        try {
+            dispatcher.execute("foodmood reroll @s", source.withPermission(0));
+            helper.fail("Non-operators must not be able to reroll cravings");
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException expected) { }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void rerollCommandTargetsNamedPlayerOrEveryone(GameTestHelper helper) throws Exception {
+        var first = new TestPlayer(helper.getLevel());
+        var second = new FakePlayer(helper.getLevel(), new GameProfile(UUID.randomUUID(), "OtherFoodTest"));
+        var firstState = assign(first, Items.APPLE);
+        var secondState = second.getData(FoodMood.CRAVINGS);
+        secondState.assign(firstState.day, List.of(id(Items.APPLE)), FoodMood.SATISFIED.getId(), 0);
+        firstState.consume(id(Items.APPLE));
+        secondState.consume(id(Items.APPLE));
+        RewardController.maintain(first, firstState);
+        RewardController.maintain(second, secondState);
+        var server = helper.getLevel().getServer();
+        // Fake players have no login handshake. Add them to the backing roster only
+        // for this synchronous selector test; the public roster is read-only.
+        var roster = net.minecraft.server.players.PlayerList.class.getDeclaredField("players");
+        roster.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var players = (List<net.minecraft.server.level.ServerPlayer>) roster.get(server.getPlayerList());
+        players.add(first);
+        players.add(second);
+        try {
+            var dispatcher = server.getCommands().getDispatcher();
+            var source = server.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+            helper.assertTrue(dispatcher.execute("foodmood reroll FoodMoodTest", source) == 1,
+                    "Named target must reroll exactly one player");
+            helper.assertTrue(!firstState.complete() && secondState.complete(), "Named reroll must leave other players alone");
+            helper.assertTrue(!first.hasEffect(FoodMood.SATISFIED), "Reroll must remove an earned reward without an external potion");
+            for (var food : firstState.foods()) firstState.consume(food);
+            helper.assertTrue(dispatcher.execute("foodmood reroll @a", source) == players.size(), "All-player selector must reroll everyone online");
+            helper.assertTrue(firstState.completedCount() == 0 && secondState.completedCount() == 0
+                    && !second.hasEffect(FoodMood.SATISFIED), "All targets must lose progress and earned rewards");
+        } finally {
+            players.remove(first);
+            players.remove(second);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void dumpCommandExportsConfiguredPoolAndEmptyPool(GameTestHelper helper) throws Exception {
+        var auto = FoodMoodConfig.AUTODETECT_FOODS.get();
+        var add = FoodMoodConfig.ADD_LIST.get();
+        var remove = FoodMoodConfig.REMOVE_LIST.get();
+        try {
+            FoodMoodConfig.AUTODETECT_FOODS.set(false);
+            FoodMoodConfig.ADD_LIST.set(List.of("minecraft:carrot", "minecraft:bread", "minecraft:apple", "minecraft:apple"));
+            FoodMoodConfig.REMOVE_LIST.set(List.of("minecraft:bread"));
+            var server = helper.getLevel().getServer();
+            var dispatcher = server.getCommands().getDispatcher();
+            var source = server.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+            helper.assertTrue(dispatcher.execute("foodmood dump", source) == 2, "Dump must report the exported count");
+            var path = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).resolve("foodmood/cravings-pool.csv");
+            helper.assertTrue(java.nio.file.Files.readAllLines(path).equals(List.of("food_id", "minecraft:apple", "minecraft:carrot")),
+                    "CSV must contain sorted unique IDs from the configured pool with a header");
+            FoodMoodConfig.ADD_LIST.set(List.of());
+            dispatcher.execute("foodmood dump", source);
+            helper.assertTrue(java.nio.file.Files.readAllLines(path).equals(List.of("food_id")),
+                    "An empty pool must replace the previous export with a header-only CSV");
+        } finally {
+            FoodMoodConfig.AUTODETECT_FOODS.set(auto);
+            FoodMoodConfig.ADD_LIST.set(add);
+            FoodMoodConfig.REMOVE_LIST.set(remove);
+            FoodPool.invalidate();
+        }
+        helper.succeed();
+    }
+
     private static CravingState assign(TestPlayer player, Item... foods) {
         var state = player.getData(FoodMood.CRAVINGS);
         state.assign(DailyCravings.day(player.server.overworld().getDayTime()), java.util.Arrays.stream(foods).map(FoodMoodGameTests::id).toList(), FoodMood.SATISFIED.getId(), 0);

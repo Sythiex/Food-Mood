@@ -35,6 +35,7 @@ public class FoodMood {
         ATTACHMENTS.register(modEventBus);
         FoodMoodConfig.register(modContainer);
         modEventBus.addListener(CravingsPayload::register);
+        NeoForge.EVENT_BUS.addListener(FoodMoodCommands::register);
         NeoForge.EVENT_BUS.register(CravingService.class);
         NeoForge.EVENT_BUS.register(com.sythiex.foodmood.effect.RewardController.class);
     }

@@ -24,12 +24,18 @@ public final class CravingService {
     public static CravingState synchronizeDay(ServerPlayer player) {
         var state = player.getData(FoodMood.CRAVINGS);
         long day = DailyCravings.day(player.server.overworld().getDayTime());
-        if (state.day != day) {
-            RewardController.expire(player, state);
-            state.assign(day, DailyCravings.select(FoodPool.current(), FoodMoodConfig.CRAVING_COUNT.get(), new Random(player.getRandom().nextLong())),
-                    RewardController.configuredEffect(), FoodMoodConfig.REWARD_EFFECT_LEVEL.get() - 1);
-            sync(player);
-        }
+        if (state.day != day) return reroll(player);
+        return state;
+    }
+
+    /** Remove the previous reward and start a fresh assignment immediately */
+    public static CravingState reroll(ServerPlayer player) {
+        var state = player.getData(FoodMood.CRAVINGS);
+        RewardController.expire(player, state);
+        state.assign(DailyCravings.day(player.server.overworld().getDayTime()),
+                DailyCravings.select(FoodPool.current(), FoodMoodConfig.CRAVING_COUNT.get(), new Random(player.getRandom().nextLong())),
+                RewardController.configuredEffect(), FoodMoodConfig.REWARD_EFFECT_LEVEL.get() - 1);
+        sync(player);
         return state;
     }
 
