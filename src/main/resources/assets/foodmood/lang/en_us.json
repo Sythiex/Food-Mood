@@ -1,7 +1,5 @@
 {
   "effect.foodmood.satisfied": "Satisfied",
-  "gui.foodmood.fulfilled": "Craving fulfilled",
-  "gui.foodmood.unfulfilled": "Eat one serving before dawn",
   "gui.foodmood.scroll": "Scroll to change page (%s/%s)",
   "foodmood.configuration.title": "Food Mood Settings",
   "foodmood.configuration.section.foodmood.client.toml": "Display Settings",

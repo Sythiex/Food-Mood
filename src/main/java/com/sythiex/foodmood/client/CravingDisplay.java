@@ -7,6 +7,7 @@ import com.sythiex.foodmood.craving.CravingState;
 import java.util.ArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -76,11 +77,10 @@ public final class CravingDisplay {
                 graphics.pose().popPose();
             }
             if (event.getMouseX() >= iconX && event.getMouseX() < iconX + 16 && event.getMouseY() >= iconY && event.getMouseY() < iconY + 16) {
-                var lines = new ArrayList<Component>();
-                lines.add(stack.isEmpty() ? Component.literal(id.toString()) : stack.getHoverName());
-                lines.add(Component.translatable(done ? "gui.foodmood.fulfilled" : "gui.foodmood.unfulfilled"));
+                var minecraft = Minecraft.getInstance();
+                var lines = new ArrayList<>(Screen.getTooltipFromItem(minecraft, stack));
                 if (pages > 1) lines.add(Component.translatable("gui.foodmood.scroll", page + 1, pages));
-                graphics.renderComponentTooltip(Minecraft.getInstance().font, lines, event.getMouseX(), event.getMouseY());
+                graphics.renderTooltip(minecraft.font, lines, stack.getTooltipImage(), stack, event.getMouseX(), event.getMouseY());
             }
         }
         if (pages > 1) {
